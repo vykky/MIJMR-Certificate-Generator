@@ -64,17 +64,24 @@ if template_file and font_file and uploaded_pdfs:
     # st.data_editor மூலம் டேட்டாவை திரையிலேயே மாற்றலாம்
     edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
     
-    if st.button("🚀 Generate Certificates (சர்டிபிகேட்களை உருவாக்கு)"):
+if st.button("🚀 Generate Certificates (சர்டிபிகேட்களை உருவாக்கு)"):
         with st.spinner('சான்றிதழ்கள் தயாராகி வருகின்றன...'):
             zip_buffer = io.BytesIO()
             
+            # பிழையைத் தவிர்க்க இமேஜ் மற்றும் ஃபான்ட் ஃபைலை மெமரியில் சேமிப்பது
+            template_bytes = template_file.getvalue()
+            font_bytes = font_file.getvalue()
+            
             with zipfile.ZipFile(zip_buffer, "w") as zip_file:
                 for index, row in edited_df.iterrows():
-                    img = Image.open(template_file)
+                    
+                    # மெமரியில் இருந்து இமேஜை ஒவ்வொரு முறையும் புதிதாக ஓபன் செய்வது
+                    img = Image.open(io.BytesIO(template_bytes))
                     draw = ImageDraw.Draw(img)
                     
-                    font_name = ImageFont.truetype(font_file, name_size)
-                    font_text = ImageFont.truetype(font_file, text_size)
+                    # மெமரியில் இருந்து ஃபான்ட்டை ஓபன் செய்வது
+                    font_name = ImageFont.truetype(io.BytesIO(font_bytes), name_size)
+                    font_text = ImageFont.truetype(io.BytesIO(font_bytes), text_size)
                     
                     author_name = str(row['Name'])
                     title = str(row['Title'])
