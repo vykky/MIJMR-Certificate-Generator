@@ -8,7 +8,7 @@ import re
 from datetime import datetime
 
 st.set_page_config(page_title="MIJMR Certificate Generator", layout="wide")
-st.title("🎓 MIJMR Certificate Generator (4K & Auto-Extract)")
+st.title("🎓 MIJMR Certificate Generator (4K & Multi-Input)")
 
 # 1. ஃபைல்களை அப்லோட் செய்யும் வசதி
 st.sidebar.header("📂 1. அடிப்படை ஃபைல்கள்")
@@ -18,13 +18,13 @@ font_file = st.sidebar.file_uploader("Font File (.ttf)", type=["ttf"])
 # 2. அளவுகளை சரிசெய்யும் வசதி 
 st.sidebar.header("📏 2. அளவுகளை சரிசெய்ய (Coordinates)")
 name_y = st.sidebar.number_input("பெயர் வரும் இடம் (Y-Axis)", value=250, step=10)
-title_y = st.sidebar.number_input("பாராக்ராப் வரும் இடம் (Y-Axis)", value=320, step=10)
+title_y = st.sidebar.number_input("பாராக்ராப் வரும் இடம் (Y-Axis)", value=295, step=5)
 
-doi_x = st.sidebar.number_input("DOI வரும் இடம் (X-Axis)", value=280, step=10)
-doi_y = st.sidebar.number_input("DOI வரும் இடம் (Y-Axis)", value=550, step=10)
+doi_x = st.sidebar.number_input("DOI வரும் இடம் (X-Axis)", value=290, step=10)
+doi_y = st.sidebar.number_input("DOI வரும் இடம் (Y-Axis)", value=450, step=10)
 
 date_x = st.sidebar.number_input("தேதி வரும் இடம் (X-Axis)", value=150, step=10)
-date_y = st.sidebar.number_input("தேதி வரும் இடம் (Y-Axis)", value=600, step=10)
+date_y = st.sidebar.number_input("தேதி வரும் இடம் (Y-Axis)", value=420, step=10)
 
 # 3. எழுத்தின் அளவு
 st.sidebar.header("🔠 3. எழுத்தின் அளவு மற்றும் நீளம்")
@@ -32,8 +32,13 @@ name_size = st.sidebar.number_input("பெயரின் அளவு (Font Si
 text_size = st.sidebar.number_input("பாராக்ராப் அளவு (Font Size)", value=18)
 wrap_width = st.sidebar.number_input("ஒரு வரியின் நீளம் (Word Wrap)", value=70)
 
-st.subheader("📄 கட்டுரைகளை (PDF) அப்லோட் செய்யவும்")
-uploaded_pdfs = st.file_uploader("PDF ஃபைல்களைத் தேர்ந்தெடுக்கவும்", type="pdf", accept_multiple_files=True)
+# புதிய வசதி: உள்ளீட்டு முறையைத் தேர்ந்தெடுக்கும் ஆப்ஷன்
+st.subheader("⚙️ உள்ளீட்டு முறையைத் தேர்ந்தெடுக்கவும் (Select Input Method)")
+input_mode = st.radio(
+    "விவரங்களை எப்படி உள்ளீடு செய்யப் போகிறீர்கள்?",
+    ["PDF கட்டுரைகள் (Auto-Extract from PDFs)", "Excel / CSV கோப்பு (Direct from Excel/CSV)"],
+    horizontal=True
+)
 
 def clean_pdf_text(pdf_file):
     try:
@@ -103,25 +108,51 @@ def clean_pdf_text(pdf_file):
     except Exception as e:
         return "Error", ["Error"], ""
 
-if template_file and font_file and uploaded_pdfs:
-    extracted_data = []
-    
-    for pdf_file in uploaded_pdfs:
-        title, authors_list, date = clean_pdf_text(pdf_file)
-        
-        for author in authors_list:
-            extracted_data.append({
-                "File Name": pdf_file.name, 
-                "Name": author, 
-                "Title": title, 
-                "Volume": "1", 
-                "Issue": "1", 
-                "DOI": "", 
-                "Date": date
-            })
+# தரவுகளைச் சேமிக்கும் காலி கட்டம்
+df = pd.DataFrame()
 
-    df = pd.DataFrame(extracted_data)
-    
+# 1. PDF ஆப்ஷன் தேர்ந்தெடுக்கப்பட்டால்
+if input_mode == "PDF கட்டுரைகள் (Auto-Extract from PDFs)":
+    uploaded_pdfs = st.file_uploader("PDF ஃபைல்களைத் தேர்ந்தெடுக்கவும்", type="pdf", accept_multiple_files=True)
+    if uploaded_pdfs:
+        extracted_data = []
+        for pdf_file in uploaded_pdfs:
+            title, authors_list, date = clean_pdf_text(pdf_file)
+            for author in authors_list:
+                extracted_data.append({
+                    "File Name": pdf_file.name, 
+                    "Name": author, 
+                    "Title": title, 
+                    "Volume": "1", 
+                    "Issue": "1", 
+                    "DOI": "", 
+                    "Date": date
+                })
+        df = pd.DataFrame(extracted_data)
+
+# 2. Excel ஆப்ஷன் தேர்ந்தெடுக்கப்பட்டால்
+else:
+    data_file = st.file_uploader("Excel அல்லது CSV கோப்பைத் தேர்ந்தெடுக்கவும்", type=["xlsx", "csv"])
+    if data_file:
+        if data_file.name.endswith('.csv'):
+            df = pd.read_csv(data_file)
+        else:
+            df = pd.read_excel(data_file)
+            
+        # எக்செல் ஃபைலில் இருக்க வேண்டிய முக்கியமான ஹெட்டிங்குகள்
+        required_cols = ["Name", "Title", "Volume", "Issue", "DOI", "Date"]
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = "" # இல்லாத காலம்களை தானாகவே உருவாக்குகிறது
+                
+        if "File Name" not in df.columns:
+            df["File Name"] = "Excel Upload"
+            
+        # காலம்களின் வரிசையை சீரமைத்தல்
+        df = df[["File Name", "Name", "Title", "Volume", "Issue", "DOI", "Date"]]
+
+# சான்றிதழ் உருவாக்கும் பகுதி
+if template_file and font_file and not df.empty:
     st.markdown("### ⚠️ சரிபார்க்கவும் (Verify & Edit):")
     edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
     
@@ -164,7 +195,6 @@ if template_file and font_file and uploaded_pdfs:
                     x_pos = (img.width - text_width) / 2
                     
                     if is_bold:
-                        # ஸ்ட்ரோக் அளவை மிக மிகக் குறைத்துள்ளோம் (Title Blob Issue Fixed)
                         stroke = max(1, int(scale_factor * 0.2))
                         draw.text((x_pos, y_pos), text, font=font, fill=color, stroke_width=stroke, stroke_fill=color)
                     else:
@@ -172,8 +202,10 @@ if template_file and font_file and uploaded_pdfs:
                         
                     return y_pos + (bbox[3] - bbox[1])
                     
+                # 1. பெயரை அச்சிடுதல்
                 draw_centered(sy_name, author_name, f_name, "#00796B")
                 
+                # 2. பாராக்ராப்பை அச்சிடுதல்
                 current_y = sy_title
                 current_y = draw_centered(current_y, "For the successful publication of the research paper titled", f_text, "black") + int(15 * scale_factor)
                 
@@ -184,9 +216,11 @@ if template_file and font_file and uploaded_pdfs:
                 current_y = draw_centered(current_y, f"in Volume {vol}, Issue {issue}. This work has been rigorously peer-", f_text, "black") + int(10 * scale_factor)
                 draw_centered(current_y, "reviewed and published under the guidelines of academic excellence.", f_text, "black")
                 
-                if doi:
+                # 3. DOI மற்றும் Date அச்சிடுதல்
+                if doi and doi.lower() != 'nan':
                     draw.text((sx_doi, sy_doi), doi, font=f_text, fill="black")
-                draw.text((sx_date, sy_date), date, font=f_text, fill="black")
+                if date and date.lower() != 'nan':
+                    draw.text((sx_date, sy_date), date, font=f_text, fill="black")
                 
                 st.image(img, caption=f"{author_name} - Certificate (4K)", use_container_width=True)
                 
@@ -202,5 +236,5 @@ if template_file and font_file and uploaded_pdfs:
                 )
                 
             st.success("✅ 4K சான்றிதழ்கள் தயார்!")
-else:
-    st.info("👈 இடதுபுறம் Blank Image, Font மற்றும் நடுவில் PDF ஃபைல்களை அப்லோட் செய்யவும்.")
+elif template_file and font_file:
+    st.info("👈 இடதுபுறம் மற்றும் நடுவில் தேவையான ஃபைல்களை அப்லோட் செய்யவும்.")
